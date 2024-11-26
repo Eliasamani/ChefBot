@@ -15,6 +15,7 @@ const ingredients = [
 ];
 
 const selectedIngredients = [];
+let conversationContext = ''; // To maintain conversation context
 
 window.onload = function() {
     const grid = document.getElementById('ingredient-grid');
@@ -71,36 +72,75 @@ window.onload = function() {
                 return;
             }
 
-            const recipes = data.recipes;
+            // Display the conversational response
+            const conversationPara = document.createElement('p');
+            conversationPara.innerText = data.conversation;
+            chatbotDiv.appendChild(conversationPara);
 
-            recipes.forEach(recipe => {
-                const recipeDiv = document.createElement('div');
-                recipeDiv.className = 'recipe';
+            // Save the context for further conversation
+            conversationContext = data.conversation;
 
-                const title = document.createElement('h3');
-                title.innerText = recipe.title;
-                recipeDiv.appendChild(title);
+            // Add an input field and button for user to respond
+            const userInput = document.createElement('input');
+            userInput.type = 'text';
+            userInput.id = 'user-input';
+            userInput.placeholder = 'Enter your choice or ask a question...';
 
-                if (recipe.image) {
-                    const image = document.createElement('img');
-                    image.src = recipe.image;
-                    image.alt = recipe.title;
-                    image.className = 'recipe-image';
-                    recipeDiv.appendChild(image);
+            const sendButton = document.createElement('button');
+            sendButton.id = 'send-button';
+            sendButton.innerText = 'Send';
+
+            chatbotDiv.appendChild(userInput);
+            chatbotDiv.appendChild(sendButton);
+
+            sendButton.onclick = () => {
+                const userMessage = userInput.value.trim();
+                if (userMessage) {
+                    sendMessageToChatbot(userMessage);
+                    userInput.value = '';
                 }
-
-                const usedIngredients = recipe.usedIngredients.map(ing => ing.name).join(', ');
-                const missedIngredients = recipe.missedIngredients.map(ing => ing.name).join(', ');
-
-                const ingredientsPara = document.createElement('p');
-                ingredientsPara.innerHTML = `<strong>Used Ingredients:</strong> ${usedIngredients}<br><strong>Missing Ingredients:</strong> ${missedIngredients}`;
-                recipeDiv.appendChild(ingredientsPara);
-
-                chatbotDiv.appendChild(recipeDiv);
-            });
+            };
         })
         .catch(error => {
             console.error('Error:', error);
         });
     };
 };
+
+function sendMessageToChatbot(message) {
+    fetch('/chatbot', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ message: message, context: conversationContext })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            console.error('Chatbot Error:', data.error);
+            return;
+        }
+
+        // Update the conversation context
+        conversationContext = data.context;
+
+        const chatbotDiv = document.getElementById('chatbot');
+
+        // Display user's message
+        const userPara = document.createElement('p');
+        userPara.innerHTML = `<strong>You:</strong> ${message}`;
+        chatbotDiv.appendChild(userPara);
+
+        // Display assistant's reply
+        const assistantPara = document.createElement('p');
+        assistantPara.innerHTML = `<strong>Assistant:</strong> ${data.reply}`;
+        chatbotDiv.appendChild(assistantPara);
+
+        // Scroll to the bottom of the chatbot div
+        chatbotDiv.scrollTop = chatbotDiv.scrollHeight;
+    })
+    .catch(error => {
+        console.error('Error:', error);
+    });
+}
