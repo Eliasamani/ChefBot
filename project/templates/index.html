@@ -1,0 +1,22 @@
+<!-- templates/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>ChefBot - Recipe Recommendation</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+    <h1>Welcome to ChefBot</h1>
+    <p>Select the ingredients you have at home:</p>
+    <div id="ingredient-grid">
+        <!-- Ingredients will be populated here -->
+    </div>
+    <button id="find-recipes">Find Recipes</button>
+    <div id="chatbot">
+        <!-- Chatbot responses will appear here -->
+    </div>
+
+    <script src="{{ url_for('static', filename='js/scripts.js') }}"></script>
+</body>
+</html>
