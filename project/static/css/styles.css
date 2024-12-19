@@ -48,7 +48,8 @@ body {
 }
 
 #chatbot p {
-    margin: 10px 0;
+    margin-top: 10px;
+    line-height: 1.6;
 }
 
 #chatbot input[type="text"] {
@@ -61,7 +62,23 @@ body {
     padding: 10px 20px;
     font-size: 16px;
     margin-left: 10px;
+    margin-top: 20px;
     cursor: pointer;
+}
+
+#chatbot h2 {
+    margin-top: 20px;
+    font-size: 24px;
+}
+
+#chatbot h3 {
+    margin-top: 15px;
+    font-size: 20px;
+}
+
+#chatbot ul {
+    list-style-type: disc;
+    margin-left: 20px;
 }
 
 button {
@@ -70,3 +87,5 @@ button {
     font-size: 16px;
     cursor: pointer;
 }
+
+

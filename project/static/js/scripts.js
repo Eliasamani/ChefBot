@@ -2,20 +2,19 @@
 
 // List of common ingredients
 const ingredients = [
-    'Eggs', 'Milk', 'Flour', 'Sugar', 'Salt',
-    'Butter', 'Chicken', 'Beef', 'Pork', 'Fish',
-    'Rice', 'Pasta', 'Tomatoes', 'Onions', 'Garlic',
-    'Carrots', 'Potatoes', 'Peppers', 'Cheese', 'Lettuce',
-    'Mushrooms', 'Broccoli', 'Spinach', 'Zucchini', 'Cucumber',
-    'Yogurt', 'Bread', 'Honey', 'Oats', 'Beans',
-    'Lentils', 'Corn', 'Peas', 'Coconut Milk', 'Soy Sauce',
-    'Vinegar', 'Olive Oil', 'Basil', 'Oregano', 'Thyme',
-    'Parsley', 'Cilantro', 'Ginger', 'Lemon', 'Lime',
-    'Chili Powder', 'Cinnamon', 'Nutmeg', 'Vanilla Extract', 'Cocoa Powder'
+    "Tomato", "Onion", "Garlic", "Chicken", "Beef", "Pork", "Fish",
+    "Rice", "Pasta", "Potato", "Carrot", "Bell Pepper", "Mushroom",
+    "Cheese", "Milk", "Eggs", "Butter", "Flour", "Sugar", "Salt",
+    "Pepper", "Basil", "Oregano", "Parsley", "Lemon", "Lime", "Apple",
+    "Banana", "Orange", "Broccoli", "Spinach", "Cucumber", "Zucchini",
+    "Corn", "Peas", "Beans", "Lettuce", "Cabbage", "Avocado", "Bacon",
+    "Sausage", "Yogurt", "Cream", "Bread", "Shrimp", "Tofu", "Soy Sauce",
+    "Vinegar", "Honey", "Chili"
 ];
 
 const selectedIngredients = [];
 let conversationContext = ''; // To maintain conversation context
+let allIngredients = []; // To store all ingredients
 
 window.onload = function() {
     const grid = document.getElementById('ingredient-grid');
@@ -46,7 +45,7 @@ window.onload = function() {
         }
 
         // Combine selected ingredients and additional ingredients
-        const allIngredients = selectedIngredients.concat(additionalIngredients);
+        allIngredients = selectedIngredients.concat(additionalIngredients);
 
         if (allIngredients.length === 0) {
             alert('Please select or enter at least one ingredient.');
@@ -72,6 +71,9 @@ window.onload = function() {
                 return;
             }
 
+            // Store current recipes
+            currentRecipes = data.recipes;
+
             // Display the conversational response
             const conversationPara = document.createElement('p');
             conversationPara.innerText = data.conversation;
@@ -81,25 +83,7 @@ window.onload = function() {
             conversationContext = data.conversation;
 
             // Add an input field and button for user to respond
-            const userInput = document.createElement('input');
-            userInput.type = 'text';
-            userInput.id = 'user-input';
-            userInput.placeholder = 'Enter your choice or ask a question...';
-
-            const sendButton = document.createElement('button');
-            sendButton.id = 'send-button';
-            sendButton.innerText = 'Send';
-
-            chatbotDiv.appendChild(userInput);
-            chatbotDiv.appendChild(sendButton);
-
-            sendButton.onclick = () => {
-                const userMessage = userInput.value.trim();
-                if (userMessage) {
-                    sendMessageToChatbot(userMessage);
-                    userInput.value = '';
-                }
-            };
+            addChatInputField(chatbotDiv, allIngredients);
         })
         .catch(error => {
             console.error('Error:', error);
@@ -107,35 +91,81 @@ window.onload = function() {
     };
 };
 
-function sendMessageToChatbot(message) {
+function addChatInputField(container, ingredients) {
+    const userInput = document.createElement('input');
+    userInput.type = 'text';
+    userInput.id = 'user-input';
+    userInput.placeholder = 'Enter your choice or ask a question...';
+
+    const sendButton = document.createElement('button');
+    sendButton.id = 'send-button';
+    sendButton.innerText = 'Send';
+
+    const inputContainer = document.createElement('div');
+    inputContainer.id = 'input-container';
+    inputContainer.appendChild(userInput);
+    inputContainer.appendChild(sendButton);
+
+    container.appendChild(inputContainer);
+
+    sendButton.onclick = () => {
+        const userMessage = userInput.value.trim();
+        if (userMessage) {
+            handleUserMessage(userMessage, ingredients);
+            userInput.value = '';
+        }
+    };
+}
+
+function handleUserMessage(message, ingredients) {
+    const chatbotDiv = document.getElementById('chatbot');
+
+    // Display user's message
+    const userPara = document.createElement('p');
+    userPara.innerHTML = `<strong>You:</strong> ${message}`;
+    chatbotDiv.appendChild(userPara);
+
+    // Prepare data to send to the backend
+    let dataToSend = {
+        message: message,
+        context: conversationContext,
+        ingredients: ingredients
+    };
+
+    // Check if the message is a recipe selection
+    const recipeNumber = parseInt(message);
+    if (!isNaN(recipeNumber) && recipeNumber >= 1 && recipeNumber <= 5) {
+        const selectedRecipe = currentRecipes[recipeNumber - 1];
+        const recipeId = selectedRecipe.id;
+
+        // Include the recipe ID in the data
+        dataToSend.recipe_id = recipeId;
+    }
+
+    // Send the message to the backend
     fetch('/chatbot', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ message: message, context: conversationContext })
+        body: JSON.stringify(dataToSend)
     })
     .then(response => response.json())
     .then(data => {
         if (data.error) {
-            console.error('Chatbot Error:', data.error);
+            const errorPara = document.createElement('p');
+            errorPara.innerText = data.error;
+            chatbotDiv.appendChild(errorPara);
             return;
         }
 
-        // Update the conversation context
-        conversationContext = data.context;
-
-        const chatbotDiv = document.getElementById('chatbot');
-
-        // Display user's message
-        const userPara = document.createElement('p');
-        userPara.innerHTML = `<strong>You:</strong> ${message}`;
-        chatbotDiv.appendChild(userPara);
-
-        // Display assistant's reply
+        // Display assistant's reply with proper formatting
         const assistantPara = document.createElement('p');
-        assistantPara.innerHTML = `<strong>Assistant:</strong> ${data.reply}`;
+        assistantPara.innerHTML = `<strong>Assistant:</strong> ${data.reply.replace(/\n/g, '<br>')}`;
         chatbotDiv.appendChild(assistantPara);
+
+        // Update conversation context
+        conversationContext = data.context;
 
         // Scroll to the bottom of the chatbot div
         chatbotDiv.scrollTop = chatbotDiv.scrollHeight;
