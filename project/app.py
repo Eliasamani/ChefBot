@@ -5,18 +5,13 @@ import os
 import openai
 from dotenv import load_dotenv
 import re
-import random
 
-# Load environment variables from .env file
 load_dotenv()
 
 app = Flask(__name__)
 
-# Retrieve API keys from environment variables
 SPOONACULAR_API_KEY = os.getenv('SPOONACULAR_API_KEY')
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
-
-# Set up OpenAI API credentials
 openai.api_key = OPENAI_API_KEY
 
 @app.route('/')
@@ -25,241 +20,299 @@ def index():
 
 @app.route('/get_recipes', methods=['POST'])
 def get_recipes():
+    """
+    1) Fetches recipes from Spoonacular based on user ingredients & preferences
+    2) Returns them to the front-end without extra text
+    """
     data = request.get_json()
     ingredients = data.get('ingredients', [])
+    preferences = data.get('preferences', {})
+
     if not ingredients:
         return jsonify({'error': 'Please select or enter some ingredients.'}), 400
 
-    # Call the Spoonacular API to get recipes using complexSearch
-    recipes = get_recipes_from_api(ingredients)
+    recipes = get_recipes_from_api(ingredients, preferences)
     if not recipes:
         return jsonify({'error': 'No recipes found with those ingredients.'}), 404
 
-    # Generate a conversational response including option 6
-    conversation = generate_conversational_response(recipes, ingredients)
+    # Refine missing
+    recipes = refine_missing_ingredients(recipes, ingredients)
 
-    # Return the conversation and recipes to the frontend
-    return jsonify({'conversation': conversation, 'recipes': recipes})
+    return jsonify({'recipes': recipes})
 
-def get_recipes_from_api(ingredients):
-    # Use the Spoonacular API to get recipes based on ingredients
-    base_url = 'https://api.spoonacular.com/recipes/complexSearch'
-    params = {
-        'apiKey': SPOONACULAR_API_KEY,
-        'includeIngredients': ','.join(ingredients),
-        'number': 5,
-        'offset': random.randint(0, 100),
-        'instructionsRequired': True,
-        'fillIngredients': True,
-        'ranking': 1,
-    }
+@app.route('/see_more', methods=['POST'])
+def see_more():
+    """
+    'See more' endpoint: fetch minimal info (title, scaled ingredients, macros) 
+    for a recipe from Spoonacular WITHOUT updating the conversation context.
+    Shown in a modal that can be hidden.
+    """
+    data = request.get_json()
+    recipe_id = data.get('recipe_id')
+    if not recipe_id:
+        return jsonify({'error': 'No recipe ID provided.'}), 400
 
-    response = requests.get(base_url, params=params)
-    if response.status_code == 200:
-        data = response.json()
-        recipes = data.get('results', [])
-        if not recipes:
-            # If no recipes found, try without includeIngredients
-            params.pop('includeIngredients')
-            response = requests.get(base_url, params=params)
-            if response.status_code == 200:
-                data = response.json()
-                recipes = data.get('results', [])
-        # Return up to 5 recipes
-        return recipes[:5]
-    else:
-        print('Error fetching recipes:', response.status_code, response.text)
-        return None
+    servings = data.get('servings', 2)
+    info = get_recipe_information(recipe_id, servings)
+    if not info:
+        return jsonify({'error': "Couldn't fetch details."}), 404
 
-def generate_conversational_response(recipes, ingredients):
-    # Prepare the recipe list including option 6
-    recipe_list = ''
-    for i, recipe in enumerate(recipes, start=1):
-        missed_ingredients_list = recipe.get('missedIngredients', [])
-        missed_count = len(missed_ingredients_list)
-        if missed_count > 0:
-            missed_ingredients_str = ', '.join([ing['name'] for ing in missed_ingredients_list])
-            recipe_list += f"{i}. {recipe['title']} (Missing {missed_count} ingredients: {missed_ingredients_str})\n"
-        else:
-            recipe_list += f"{i}. {recipe['title']} (You have all the ingredients!)\n"
-
-    recipe_list += "6. Get new recipes\n"
-
-    # Prepare the messages for ChatCompletion
-    messages = [
-        {
-            "role": "system",
-            "content": "You are a helpful cooking assistant."
-        },
-        {
-            "role": "user",
-            "content": (
-                f"The user has the following ingredients: {', '.join(ingredients)}.\n"
-                f"Based on these ingredients, suggest the following recipes:\n"
-                f"{recipe_list}\n"
-                f"Please present this information in a conversational and friendly manner, "
-                f"letting the user know they can select a recipe by number (1-5) or enter 6 to get new recipes."
-            )
-        }
-    ]
-
-    # Call OpenAI's ChatCompletion API using the correct method
-    try:
-        response = openai.chat.completions.create(
-            model='gpt-3.5-turbo',
-            messages=messages,
-            max_tokens=500,
-            temperature=0.7,
-        )
-        assistant_reply = response.choices[0].message.content.strip()
-        return assistant_reply
-    except Exception as e:
-        print('Error in generate_conversational_response:', str(e))
-        return f'An error occurred while generating the response: {str(e)}'
+    summary = build_short_info(info)
+    return jsonify({'info': summary})
 
 @app.route('/chatbot', methods=['POST'])
 def chatbot():
+    """
+    Handles special commands:
+    - "CHOOSE_RECIPE_{id}__SERVINGS_{servings}" => fetch recipe info with given servings, 
+      append the details to the conversation context (CHOSEN_RECIPE_DETAILS).
+    - "I want new recipes"
+    - "I only want recipes with ingredients I have"
+    - Otherwise: normal conversation with GPT
+    """
     data = request.get_json()
-    user_message = data.get('message', '')
+    user_message = data.get('message', '').strip()
     context = data.get('context', '')
     ingredients = data.get('ingredients', [])
 
     if not user_message:
         return jsonify({'error': 'No message provided.'}), 400
 
-    # Check if the user requested new recipes
-    if 'new recipes' in user_message.lower() or user_message.strip() == '6':
-        # Fetch new recipes
-        recipes = get_recipes_from_api(ingredients)
-        if not recipes:
-            assistant_reply = "I'm sorry, I couldn't find any new recipes."
-        else:
-            # Generate a new conversational response
-            conversation = generate_conversational_response(recipes, ingredients)
-            assistant_reply = conversation
-            # Reset the context with new conversation
-            context = conversation
+    user_message_lower = user_message.lower()
 
+    # "I want new recipes"
+    if user_message_lower == 'i want new recipes':
+        new_recipes = get_recipes_from_api(ingredients, preferences=None, fresh_call=True)
+        if not new_recipes:
+            return jsonify({'reply': "I'm sorry, I couldn't find any new recipes.", 'context': context})
+
+        new_recipes = refine_missing_ingredients(new_recipes, ingredients)
+        return jsonify({
+            'reply': "Here are some brand new recipes!",
+            'recipes': new_recipes,
+            'context': context
+        })
+
+    # "I only want recipes with ingredients i have"
+    if user_message_lower == 'i only want recipes with ingredients i have':
+        possible_recipes = get_recipes_from_api(ingredients, preferences=None, fresh_call=True)
+        if not possible_recipes:
+            return jsonify({'reply': "No recipes found.", 'context': context})
+        possible_recipes = refine_missing_ingredients(possible_recipes, ingredients)
+        strict = [r for r in possible_recipes if not r.get('missedIngredients')]
+        if not strict:
+            return jsonify({'reply': "No strictly matched recipes found.", 'context': context})
+        return jsonify({
+            'reply': "Here are strictly matched recipes:",
+            'recipes': strict,
+            'context': context
+        })
+
+    # "CHOOSE_RECIPE_{id}__SERVINGS_{servings}"
+    if user_message_lower.startswith('choose_recipe_'):
+        try:
+            parts = user_message.split('__SERVINGS_')
+            left = parts[0]  # "CHOOSE_RECIPE_12345"
+            servings_str = parts[1]
+            servings = int(servings_str)
+
+            recipe_id = left.split('_')[-1]
+            recipe_info = get_recipe_information(recipe_id, servings)
+            if not recipe_info:
+                return jsonify({'reply': "Sorry, I couldn't retrieve details for that recipe.", 'context': context})
+
+            reply_msg = generate_recipe_details_msg(recipe_info)
+            # Add these details to the context so GPT can see them if the user asks further questions
+            updated_context = context + f"\nCHOSEN_RECIPE_DETAILS:\n{reply_msg}\n"
+            return jsonify({'reply': reply_msg, 'context': updated_context})
+        except Exception as e:
+            print("Error parsing CHOOSE_RECIPE command:", e)
+            return jsonify({'reply': "Error: invalid recipe choose command.", 'context': context})
+
+    # Otherwise, normal conversation with GPT (must use openai.chat.completions.create)
+    try:
+        response = openai.chat.completions.create(
+            model='gpt-3.5-turbo',
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a helpful cooking assistant. "
+                        "You can provide normal conversation or handle specific user commands. "
+                        "When the user chooses a recipe, provide details. "
+                        "If the user asks for new recipes, generate new suggestions. "
+                        "If the user wants portion scaling, reflect that in the ingredients and macros. "
+                        "If CHOSEN_RECIPE_DETAILS is in the context, you may reference it."
+                    )
+                },
+                {
+                    "role": "assistant",
+                    "content": context
+                },
+                {
+                    "role": "user",
+                    "content": user_message
+                }
+            ],
+            max_tokens=300,
+            temperature=0.7,
+        )
+        assistant_reply = response.choices[0].message.content.strip()
+        # We do not modify context here; up to you if you want to store the new exchange
         return jsonify({'reply': assistant_reply, 'context': context})
-
-    # Check if the user selected a recipe
-    if user_message.isdigit():
-        recipe_number = int(user_message)
-        if 1 <= recipe_number <= 5:
-            recipe_id = data.get('recipe_id')
-            if not recipe_id:
-                assistant_reply = "Sorry, I couldn't find that recipe. Please try again."
-                return jsonify({'reply': assistant_reply, 'context': context})
-            
-            # Fetch detailed recipe information (placeholder function)
-            recipe_details = get_recipe_details(recipe_id)
-            if not recipe_details:
-                assistant_reply = "Sorry, I couldn't retrieve the recipe details."
-            else:
-                # Generate a conversational response with the recipe details
-                assistant_reply = generate_recipe_conversational_response(recipe_details)
-                # Update the context with the assistant's reply
-                context += f"\nAssistant: {assistant_reply}"
-
-            return jsonify({'reply': assistant_reply, 'context': context})
-        else:
-            assistant_reply = "Please enter a valid recipe number between 1 and 5, or enter 6 to get new recipes."
-            return jsonify({'reply': assistant_reply, 'context': context})
-
-    # For any other messages, continue the conversation
-    messages = [
-        {
-            "role": "system",
-            "content": (
-                "You are a helpful cooking assistant. "
-                "When the user selects a recipe by number, provide detailed instructions for that recipe. "
-                "If the user asks questions, provide clear and concise answers. "
-                "If the user requests new recipes, generate new suggestions based on their ingredients."
-            )
-        },
-        {
-            "role": "assistant",
-            "content": context
-        },
-        {
-            "role": "user",
-            "content": user_message
-        }
-    ]
-
-    # Generate a response using OpenAI
-    try:
-        response = openai.chat.completions.create(
-            model='gpt-3.5-turbo',
-            messages=messages,
-            max_tokens=500,
-            temperature=0.7,
-        )
-        assistant_reply = response.choices[0].message.content.strip()
-        # Append the conversation for context
-        new_context = context + f"\nUser: {user_message}\nAssistant: {assistant_reply}"
     except Exception as e:
-        print('Error in chatbot:', str(e))
-        assistant_reply = f'An error occurred while processing your request: {str(e)}'
-        new_context = context
+        return jsonify({'reply': f"An error occurred: {str(e)}", 'context': context})
 
-    return jsonify({'reply': assistant_reply, 'context': new_context})
+# ----------------------------------------------------------------
+# HELPER FUNCTIONS
+# ----------------------------------------------------------------
 
-def get_recipe_details(recipe_id):
-    # Placeholder function to get detailed recipe information
-    # Your colleague will implement this function
-    # For now, we simulate fetching recipe details
-    # In the real implementation, this will call the Spoonacular API
-    print(f"Fetching details for recipe_id: {recipe_id}")
-    # Simulated recipe details
-    recipe_details = {
-        'title': 'Sample Recipe',
-        'extendedIngredients': [
-            {'originalString': '1 cup of sample ingredient'},
-            {'originalString': '2 tablespoons of another ingredient'}
-        ],
-        'instructions': '1. Do this.\n2. Do that.'
+def get_recipes_from_api(ingredients, preferences=None, fresh_call=False):
+    base_url = 'https://api.spoonacular.com/recipes/complexSearch'
+    params = {
+        'apiKey': SPOONACULAR_API_KEY,
+        'includeIngredients': ','.join(ingredients),
+        'number': 5,
+        'ranking': 1,
+        'sort': 'meta-score',
+        'instructionsRequired': True,
+        'fillIngredients': True,
+        'ignorePantry': True
     }
-    return recipe_details
 
-def generate_recipe_conversational_response(recipe_details):
-    # Prepare the message with recipe details
-    title = recipe_details.get('title', 'Recipe')
-    ingredients = [ing['originalString'] for ing in recipe_details.get('extendedIngredients', [])]
-    instructions = recipe_details.get('instructions', 'No instructions available.')
+    intolerances = []
+    if preferences:
+        if preferences.get('vegan'):
+            params['diet'] = 'vegan'
+        if preferences.get('glutenFree'):
+            intolerances.append('gluten')
+        if preferences.get('dairyFree'):
+            intolerances.append('dairy')
+        if preferences.get('nutFree'):
+            intolerances.append('peanut')
+            intolerances.append('tree nut')
+    if intolerances:
+        params['intolerances'] = ','.join(set(intolerances))
 
-    message_content = (
-        f"Here are the details for **{title}**:\n\n"
-        f"**Ingredients:**\n" + '\n'.join(ingredients) + "\n\n"
+    resp = requests.get(base_url, params=params)
+    if resp.status_code == 200:
+        data = resp.json()
+        recs = data.get('results', [])
+        if recs:
+            return recs
+        # fallback
+        params.pop('includeIngredients', None)
+        r2 = requests.get(base_url, params=params)
+        if r2.status_code == 200:
+            return r2.json().get('results', [])
+    return None
+
+def refine_missing_ingredients(recipes, user_ingredients):
+    simplified_user_ings = set(singularize(ing) for ing in user_ingredients)
+    for recipe in recipes:
+        missed = recipe.get('missedIngredients', [])
+        refined = []
+        for ing in missed:
+            if singularize(ing['name']) not in simplified_user_ings:
+                refined.append(ing)
+        recipe['missedIngredients'] = refined
+    return recipes
+
+def singularize(word):
+    w = word.lower()
+    w = re.sub(r'[\W_]+', '', w)
+    if w.endswith('ies') and len(w) > 3:
+        w = w[:-3] + 'y'
+    elif w.endswith('es') and len(w) > 2:
+        w = w[:-2]
+    elif w.endswith('s') and len(w) > 1:
+        w = w[:-1]
+    return w
+
+def get_recipe_information(recipe_id, servings=2):
+    """
+    Calls Spoonacular's GET Recipe Information endpoint
+    with includeNutrition=true and the user-specified servings.
+    """
+    url = f"https://api.spoonacular.com/recipes/{recipe_id}/information"
+    params = {
+        'apiKey': SPOONACULAR_API_KEY,
+        'includeNutrition': 'true',
+        'servings': servings
+    }
+    resp = requests.get(url, params=params)
+    if resp.status_code == 200:
+        return resp.json()
+    return None
+
+def generate_recipe_details_msg(recipe_info):
+    """
+    Build a user-friendly message with:
+      - Title
+      - Servings
+      - Ingredient list (scaled)
+      - Instructions
+      - Macros
+    """
+    title = recipe_info.get('title', 'Recipe')
+    servings = recipe_info.get('servings', 2)
+
+    ext_ings = recipe_info.get('extendedIngredients', [])
+    ing_lines = [ing.get('original', '') for ing in ext_ings]
+
+    instructions = ''
+    if recipe_info.get('analyzedInstructions'):
+        steps = recipe_info['analyzedInstructions'][0].get('steps', [])
+        instructions = "\n".join([f"{s['number']}. {s['step']}" for s in steps])
+    else:
+        instructions = recipe_info.get('instructions', 'No instructions found.')
+
+    macros = build_macros_info(recipe_info)
+
+    msg = (
+        f"**{title}** (for {servings} servings)\n\n"
+        f"**Ingredients:**\n" + "\n".join(ing_lines) + "\n\n"
         f"**Instructions:**\n{instructions}\n\n"
-        f"Feel free to ask any questions about this recipe or select another option."
+        f"**Macros:**\n{macros}\n"
+        f"\nFeel free to ask more questions or choose another recipe."
     )
+    return msg
 
-    # Prepare the messages for ChatCompletion
-    messages = [
-        {
-            "role": "system",
-            "content": "You are a helpful cooking assistant."
-        },
-        {
-            "role": "user",
-            "content": message_content
-        }
-    ]
+def build_macros_info(recipe_info):
+    nutrition = recipe_info.get('nutrition', {})
+    nutrients = nutrition.get('nutrients', [])
+    macros_map = {}
+    for n in nutrients:
+        name_lower = n['name'].lower()
+        if name_lower in ['calories', 'fat', 'protein', 'carbohydrates']:
+            macros_map[n['name']] = f"{n['amount']} {n['unit']}"
 
-    # Generate a response using OpenAI
-    try:
-        response = openai.chat.completions.create(
-            model='gpt-3.5-turbo',
-            messages=messages,
-            max_tokens=500,
-            temperature=0.7,
+    if macros_map:
+        return (
+            f"Calories: {macros_map.get('Calories', 'N/A')}\n"
+            f"Carbs: {macros_map.get('Carbohydrates', 'N/A')}\n"
+            f"Fat: {macros_map.get('Fat', 'N/A')}\n"
+            f"Protein: {macros_map.get('Protein', 'N/A')}"
         )
-        assistant_reply = response.choices[0].message.content.strip()
-        return assistant_reply
-    except Exception as e:
-        print('Error in generate_recipe_conversational_response:', str(e))
-        return f'An error occurred while generating the recipe response: {str(e)}'
+    else:
+        return "No macro data found."
+
+def build_short_info(recipe_info):
+    """
+    Return minimal info for the 'See more' modal
+    """
+    title = recipe_info.get('title', 'Recipe')
+    servings = recipe_info.get('servings', 2)
+    ext_ings = recipe_info.get('extendedIngredients', [])
+    ing_list = [ing.get('original', '') for ing in ext_ings]
+
+    macros = build_macros_info(recipe_info)
+    return {
+        'title': title,
+        'servings': servings,
+        'ingredients': ing_list,
+        'macros': macros
+    }
 
 if __name__ == '__main__':
     app.run(debug=True)

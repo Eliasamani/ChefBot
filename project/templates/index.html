@@ -1,24 +1,139 @@
-<!-- templates/index.html -->
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
+  <head>
+    <meta charset="UTF-8" />
     <title>ChefBot - Recipe Recommendation</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
-</head>
-<body>
-    <h1>Welcome to ChefBot</h1>
-    <p>Select the ingredients you have at home:</p>
-    <div id="ingredient-grid">
-        <!-- Ingredients will be populated here -->
-    </div>
-    <p>And I also have:</p>
-    <input type="text" id="additional-ingredients" placeholder="e.g., mushrooms, basil, cream">
-    <button id="find-recipes">Find Recipes</button>
-    <div id="chatbot" style="margin-top: 20px;">
-        <!-- Chatbot interactions will appear here -->
+    <!-- Bootstrap CSS (via CDN) -->
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+    />
+    <!-- Your custom styles -->
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/styles.css') }}"
+    />
+  </head>
+  <body class="bg-light">
+    <div class="container py-5">
+      <h1 class="text-center mb-4">Welcome to ChefBot</h1>
+
+      <div class="mb-3">
+        <h5>Select dietary preferences or allergies:</h5>
+        <div class="form-check form-check-inline">
+          <input class="form-check-input" type="checkbox" id="vegan" />
+          <label class="form-check-label" for="vegan">Vegan</label>
+        </div>
+        <div class="form-check form-check-inline">
+          <input class="form-check-input" type="checkbox" id="gluten-free" />
+          <label class="form-check-label" for="gluten-free">Gluten-Free</label>
+        </div>
+        <div class="form-check form-check-inline">
+          <input class="form-check-input" type="checkbox" id="dairy-free" />
+          <label class="form-check-label" for="dairy-free">Dairy-Free</label>
+        </div>
+        <div class="form-check form-check-inline">
+          <input class="form-check-input" type="checkbox" id="nut-free" />
+          <label class="form-check-label" for="nut-free">Nut-Free</label>
+        </div>
+      </div>
+
+      <div class="mb-3">
+        <h5>Select the ingredients you have at home:</h5>
+        <div id="ingredient-categories" class="row">
+          <!-- Populated by scripts.js -->
+        </div>
+      </div>
+
+      <div class="mb-3">
+        <label for="additional-ingredients" class="form-label">
+          Additional Ingredients (comma-separated):
+        </label>
+        <input
+          type="text"
+          class="form-control"
+          id="additional-ingredients"
+          placeholder="e.g., mushrooms, basil, cream"
+        />
+      </div>
+
+      <button id="find-recipes" class="btn btn-primary mb-3">Find Recipes</button>
+
+      <!-- Chatbot Container -->
+      <div
+        id="chatbot"
+        class="border rounded bg-white"
+        style="display: none; height: 500px; position: relative;"
+      >
+        <!-- Messages container -->
+        <div
+          id="chat-messages"
+          style="height: calc(100% - 130px); overflow-y: auto; padding: 15px;"
+        >
+          <!-- Chat bubbles appended here -->
+        </div>
+
+        <!-- Chat suggestions (buttons) -->
+        <div
+          id="chat-suggestions"
+          class="p-2 border-top"
+          style="height: 70px; overflow-y: auto;"
+        >
+          <!-- We'll add two suggestions in scripts.js -->
+        </div>
+
+        <!-- Input container at bottom -->
+        <div
+          id="input-container"
+          style="
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background-color: #f0f0f0;
+            padding: 10px;
+          "
+        >
+          <!-- We'll create the text input & send button in scripts.js -->
+        </div>
+      </div>
     </div>
 
-    <script src="{{ url_for('static', filename='js/scripts.js') }}"></script>
-</body>
+    <!-- A Bootstrap modal for 'See more' info -->
+    <div class="modal fade" id="seeMoreModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="seeMoreModalTitle">Recipe Info</h5>
+            <button
+              type="button"
+              class="btn-close"
+              data-bs-dismiss="modal"
+              aria-label="Close"
+            ></button>
+          </div>
+          <div class="modal-body" id="seeMoreModalBody">
+            <!-- We'll fill this with see_more fetch result in scripts.js -->
+          </div>
+          <div class="modal-footer">
+            <button
+              type="button"
+              class="btn btn-secondary"
+              data-bs-dismiss="modal"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bootstrap JS (via CDN) -->
+    <script
+      src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"
+    ></script>
+
+    <!-- Load scripts.js AFTER HTML is fully loaded -->
+    <script src="{{ url_for('static', filename='js/scripts.js') }}" defer></script>
+  </body>
 </html>

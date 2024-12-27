@@ -1,176 +1,425 @@
 // static/js/scripts.js
 
-// List of common ingredients
-const ingredients = [
-    "Tomato", "Onion", "Garlic", "Chicken", "Beef", "Pork", "Fish",
-    "Rice", "Pasta", "Potato", "Carrot", "Bell Pepper", "Mushroom",
-    "Cheese", "Milk", "Eggs", "Butter", "Flour", "Sugar", "Salt",
-    "Pepper", "Basil", "Oregano", "Parsley", "Lemon", "Lime", "Apple",
-    "Banana", "Orange", "Broccoli", "Spinach", "Cucumber", "Zucchini",
-    "Corn", "Peas", "Beans", "Lettuce", "Cabbage", "Avocado", "Bacon",
-    "Sausage", "Yogurt", "Cream", "Bread", "Shrimp", "Tofu", "Soy Sauce",
-    "Vinegar", "Honey", "Chili"
-];
-
-const selectedIngredients = [];
-let conversationContext = ''; // To maintain conversation context
-let allIngredients = []; // To store all ingredients
-
-window.onload = function() {
-    const grid = document.getElementById('ingredient-grid');
-    ingredients.forEach(ingredient => {
-        const div = document.createElement('div');
-        div.className = 'ingredient';
-        div.innerText = ingredient;
-        div.onclick = () => {
-            div.classList.toggle('selected');
-            if (selectedIngredients.includes(ingredient)) {
-                const index = selectedIngredients.indexOf(ingredient);
-                selectedIngredients.splice(index, 1);
-            } else {
-                selectedIngredients.push(ingredient);
-            }
+const ingredientCategories = {
+    Vegetables: ["Tomato", "Onion", "Garlic", "Carrot", "Bell Pepper", "Mushroom", "Broccoli", "Spinach", "Cucumber", "Zucchini", "Corn", "Peas", "Beans", "Lettuce", "Cabbage"],
+    Fruits: ["Apple", "Banana", "Orange", "Lemon", "Lime", "Avocado"],
+    Proteins: ["Chicken", "Beef", "Pork", "Fish", "Shrimp", "Tofu", "Bacon", "Sausage"],
+    Dairy: ["Cheese", "Milk", "Eggs", "Butter", "Yogurt", "Cream"],
+    Grains: ["Rice", "Pasta", "Bread", "Flour"],
+    Condiments: ["Salt", "Pepper", "Basil", "Oregano", "Parsley", "Soy Sauce", "Vinegar", "Honey", "Chili"],
+    Sweeteners: ["Sugar"]
+  };
+  
+  let selectedIngredients = [];
+  let conversationContext = '';
+  let allIngredients = [];
+  let currentRecipes = [];
+  
+  document.addEventListener('DOMContentLoaded', function() {
+    // 1) Populate ingredient badges
+    const ingredientCategoriesDiv = document.getElementById('ingredient-categories');
+    Object.keys(ingredientCategories).forEach(category => {
+      const colDiv = document.createElement('div');
+      colDiv.className = 'col-md-4 mb-3';
+  
+      const cardDiv = document.createElement('div');
+      cardDiv.className = 'card h-100';
+  
+      const cardBody = document.createElement('div');
+      cardBody.className = 'card-body';
+  
+      const categoryTitle = document.createElement('h5');
+      categoryTitle.innerText = category;
+      categoryTitle.className = 'card-title text-center';
+      cardBody.appendChild(categoryTitle);
+  
+      ingredientCategories[category].forEach(ingredient => {
+        const badge = document.createElement('span');
+        badge.className = 'badge bg-secondary m-1';
+        badge.style.cursor = 'pointer';
+        badge.innerText = ingredient;
+  
+        badge.onclick = () => {
+          if (selectedIngredients.includes(ingredient)) {
+            selectedIngredients = selectedIngredients.filter(i => i !== ingredient);
+            badge.className = 'badge bg-secondary m-1';
+          } else {
+            selectedIngredients.push(ingredient);
+            badge.className = 'badge bg-success m-1';
+          }
         };
-        grid.appendChild(div);
+  
+        cardBody.appendChild(badge);
+      });
+  
+      cardDiv.appendChild(cardBody);
+      colDiv.appendChild(cardDiv);
+      ingredientCategoriesDiv.appendChild(colDiv);
     });
-
-    document.getElementById('find-recipes').onclick = () => {
-        // Get additional ingredients from input
-        const additionalInput = document.getElementById('additional-ingredients').value.trim();
-        let additionalIngredients = [];
-
-        if (additionalInput) {
-            // Split the input by commas and clean up whitespace
-            additionalIngredients = additionalInput.split(',').map(ing => ing.trim()).filter(ing => ing.length > 0);
-        }
-
-        // Combine selected ingredients and additional ingredients
-        allIngredients = selectedIngredients.concat(additionalIngredients);
-
-        if (allIngredients.length === 0) {
-            alert('Please select or enter at least one ingredient.');
-            return;
-        }
-
-        fetch('/get_recipes', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ ingredients: allIngredients })
+  
+    // 2) "Find Recipes" button
+    const findRecipesButton = document.getElementById('find-recipes');
+    findRecipesButton.onclick = () => {
+      const vegan = document.getElementById('vegan');
+      const glutenFree = document.getElementById('gluten-free');
+      const dairyFree = document.getElementById('dairy-free');
+      const nutFree = document.getElementById('nut-free');
+  
+      const additionalInput = document.getElementById('additional-ingredients').value.trim();
+      let additionalIngredients = [];
+      if (additionalInput) {
+        additionalIngredients = additionalInput
+          .split(',')
+          .map(x => x.trim())
+          .filter(x => x.length > 0);
+      }
+  
+      allIngredients = selectedIngredients.concat(additionalIngredients);
+      if (allIngredients.length === 0) {
+        alert('Please select or enter at least one ingredient.');
+        return;
+      }
+  
+      const dietaryPreferences = {
+        vegan: vegan.checked,
+        glutenFree: glutenFree.checked,
+        dairyFree: dairyFree.checked,
+        nutFree: nutFree.checked
+      };
+  
+      showLoadingBubble();
+  
+      fetch('/get_recipes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ingredients: allIngredients,
+          preferences: dietaryPreferences
         })
-        .then(response => response.json())
-        .then(data => {
-            const chatbotDiv = document.getElementById('chatbot');
-            chatbotDiv.innerHTML = ''; // Clear previous content
-
-            if (data.error) {
-                const errorPara = document.createElement('p');
-                errorPara.innerText = data.error;
-                chatbotDiv.appendChild(errorPara);
-                return;
-            }
-
-            // Store current recipes
-            currentRecipes = data.recipes;
-
-            // Display the conversational response
-            const conversationPara = document.createElement('p');
-            conversationPara.innerText = data.conversation;
-            chatbotDiv.appendChild(conversationPara);
-
-            // Save the context for further conversation
-            conversationContext = data.conversation;
-
-            // Add an input field and button for user to respond
-            addChatInputField(chatbotDiv, allIngredients);
-        })
-        .catch(error => {
-            console.error('Error:', error);
-        });
+      })
+      .then(res => res.json())
+      .then(data => {
+        removeLoadingBubble();
+  
+        const chatbotDiv = document.getElementById('chatbot');
+        chatbotDiv.style.display = 'block';
+  
+        const chatMessagesDiv = document.getElementById('chat-messages');
+        chatMessagesDiv.innerHTML = ''; // Clear old content
+  
+        if (data.error) {
+          addAssistantMessage(data.error);
+          return;
+        }
+  
+        currentRecipes = data.recipes;
+        displayRecipesInChat(currentRecipes);
+  
+        addChatInputField();
+        initChatSuggestions();
+      })
+      .catch(err => {
+        removeLoadingBubble();
+        console.error(err);
+      });
     };
-};
-
-function addChatInputField(container, ingredients) {
+  });
+  
+  /** Show a temporary "Assistant: Loading..." bubble */
+  function showLoadingBubble() {
+    const chatbotDiv = document.getElementById('chatbot');
+    chatbotDiv.style.display = 'block';
+  
+    const chatMessagesDiv = document.getElementById('chat-messages');
+    const bubble = document.createElement('div');
+    bubble.className = 'chat-bubble assistant-bubble';
+    bubble.id = 'loading-bubble';
+    bubble.innerText = 'Assistant: Loading...';
+    chatMessagesDiv.appendChild(bubble);
+    chatMessagesDiv.scrollTop = chatMessagesDiv.scrollHeight;
+  }
+  
+  /** Remove the "Loading..." bubble if it exists */
+  function removeLoadingBubble() {
+    const bubble = document.getElementById('loading-bubble');
+    if (bubble) bubble.remove();
+  }
+  
+  /** Add an assistant bubble */
+  function addAssistantMessage(text) {
+    const chatMessagesDiv = document.getElementById('chat-messages');
+    const bubble = document.createElement('div');
+    bubble.className = 'chat-bubble assistant-bubble';
+    bubble.innerHTML = text.replace(/\n/g, '<br>');
+    chatMessagesDiv.appendChild(bubble);
+    chatMessagesDiv.scrollTop = chatMessagesDiv.scrollHeight;
+  }
+  
+  /** Add a user bubble */
+  function addUserMessage(text) {
+    const chatMessagesDiv = document.getElementById('chat-messages');
+    const bubble = document.createElement('div');
+    bubble.className = 'chat-bubble user-bubble';
+    bubble.innerHTML = text.replace(/\n/g, '<br>');
+    chatMessagesDiv.appendChild(bubble);
+    chatMessagesDiv.scrollTop = chatMessagesDiv.scrollHeight;
+  }
+  
+  /** Display recipes with "Choose" and "See more" */
+  function displayRecipesInChat(recipes) {
+    const chatMessagesDiv = document.getElementById('chat-messages');
+    chatMessagesDiv.innerHTML = '';
+  
+    if (!recipes || recipes.length === 0) {
+      addAssistantMessage("No recipes found.");
+      return;
+    }
+  
+    recipes.forEach((recipe) => {
+      const recipeId = recipe.id;
+      const bubble = document.createElement('div');
+      bubble.className = 'chat-bubble assistant-bubble';
+  
+      const missed = recipe.missedIngredients || [];
+      let missedText = '';
+      if (missed.length > 0) {
+        const names = missed.map(m => m.name).join(', ');
+        missedText = ` (Missing: ${names})`;
+      }
+  
+      const uniqueId = `servings-${recipeId}`;
+      bubble.innerHTML = `
+        <strong>${recipe.title}</strong> ${missedText}
+        <br>
+        <label for="${uniqueId}" class="form-label mt-2" style="font-size: 0.9em;">Servings:</label>
+        <input type="number" id="${uniqueId}" min="1" value="2" style="width: 60px; margin-right: 5px;">
+        <button class="btn btn-sm btn-secondary" onclick="chooseRecipe('${recipeId}', '${uniqueId}')">
+          Choose
+        </button>
+        <button class="btn btn-sm btn-primary ms-2" onclick="seeMoreRecipe('${recipeId}')">
+          See more
+        </button>
+      `;
+      chatMessagesDiv.appendChild(bubble);
+    });
+    chatMessagesDiv.scrollTop = chatMessagesDiv.scrollHeight;
+  }
+  
+  /** Called when user clicks "Choose" */
+  function chooseRecipe(recipeId, servingsInputId) {
+    const servingsInput = document.getElementById(servingsInputId);
+    let servings = 2;
+    if (servingsInput) {
+      servings = parseInt(servingsInput.value, 10) || 2;
+    }
+    addUserMessage(`Choosing recipe #${recipeId} for ${servings} servings...`);
+  
+    showLoadingBubble();
+    fetch('/chatbot', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: `CHOOSE_RECIPE_${recipeId}__SERVINGS_${servings}`,
+        context: conversationContext,
+        ingredients: allIngredients
+      })
+    })
+    .then(res => res.json())
+    .then(data => {
+      removeLoadingBubble();
+      if (data.error) {
+        addAssistantMessage(data.error);
+        return;
+      }
+      if (data.reply) {
+        addAssistantMessage(data.reply);
+      }
+      // Update context if provided
+      if (data.context) {
+        conversationContext = data.context;
+      }
+    })
+    .catch(err => {
+      removeLoadingBubble();
+      console.error(err);
+    });
+  }
+  
+  /** "See more" => fetch minimal info from /see_more, show in a Bootstrap modal */
+  function seeMoreRecipe(recipeId) {
+    showLoadingBubble();
+    fetch('/see_more', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ recipe_id: recipeId, servings: 2 })
+    })
+    .then(res => res.json())
+    .then(data => {
+      removeLoadingBubble();
+      if (data.error) {
+        alert(data.error);
+        return;
+      }
+      // data.info => { title, servings, ingredients, macros }
+      const info = data.info;
+      const modalTitle = document.getElementById('seeMoreModalTitle');
+      const modalBody = document.getElementById('seeMoreModalBody');
+  
+      modalTitle.textContent = info.title;
+      const ingHtml = info.ingredients.map(ing => `<li>${ing}</li>`).join('');
+      const macrosHtml = info.macros.replace(/\n/g, '<br>');
+  
+      modalBody.innerHTML = `
+        <p><strong>Servings:</strong> ${info.servings}</p>
+        <p><strong>Ingredients:</strong></p>
+        <ul>${ingHtml}</ul>
+        <p><strong>Macros:</strong><br>${macrosHtml}</p>
+      `;
+  
+      // Show the Bootstrap modal
+      const myModal = new bootstrap.Modal(document.getElementById('seeMoreModal'), {});
+      myModal.show();
+    })
+    .catch(err => {
+      removeLoadingBubble();
+      console.error(err);
+    });
+  }
+  
+  /** Provide user input field + "send" button */
+  function addChatInputField() {
+    const inputContainer = document.getElementById('input-container');
+    inputContainer.innerHTML = '';
+  
+    const rowDiv = document.createElement('div');
+    rowDiv.className = 'd-flex';
+  
     const userInput = document.createElement('input');
     userInput.type = 'text';
+    userInput.className = 'form-control';
     userInput.id = 'user-input';
-    userInput.placeholder = 'Enter your choice or ask a question...';
-
-    const sendButton = document.createElement('button');
-    sendButton.id = 'send-button';
-    sendButton.innerText = 'Send';
-
-    const inputContainer = document.createElement('div');
-    inputContainer.id = 'input-container';
-    inputContainer.appendChild(userInput);
-    inputContainer.appendChild(sendButton);
-
-    container.appendChild(inputContainer);
-
-    sendButton.onclick = () => {
-        const userMessage = userInput.value.trim();
-        if (userMessage) {
-            handleUserMessage(userMessage, ingredients);
-            userInput.value = '';
-        }
+    userInput.placeholder = 'Type your message...';
+  
+    const sendBtn = document.createElement('button');
+    sendBtn.className = 'btn btn-success ms-2';
+    sendBtn.innerText = 'Send';
+  
+    rowDiv.appendChild(userInput);
+    rowDiv.appendChild(sendBtn);
+    inputContainer.appendChild(rowDiv);
+  
+    sendBtn.onclick = () => {
+      const message = userInput.value.trim();
+      if (message) {
+        addUserMessage(message);
+        sendMessageToChatbot(message);
+        userInput.value = '';
+      }
     };
-}
-
-function handleUserMessage(message, ingredients) {
-    const chatbotDiv = document.getElementById('chatbot');
-
-    // Display user's message
-    const userPara = document.createElement('p');
-    userPara.innerHTML = `<strong>You:</strong> ${message}`;
-    chatbotDiv.appendChild(userPara);
-
-    // Prepare data to send to the backend
-    let dataToSend = {
+  }
+  
+  /** Provide two suggestions */
+  function initChatSuggestions() {
+    const chatSuggestions = document.getElementById('chat-suggestions');
+    chatSuggestions.innerHTML = '';
+  
+    const btn1 = document.createElement('button');
+    btn1.className = 'btn btn-outline-primary btn-sm me-2';
+    btn1.innerText = 'I want new recipes';
+    btn1.onclick = () => {
+      addUserMessage('I want new recipes');
+      showLoadingBubble();
+      fetch('/chatbot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: 'I want new recipes',
+          context: conversationContext,
+          ingredients: allIngredients
+        })
+      })
+      .then(res => res.json())
+      .then(data => {
+        removeLoadingBubble();
+        if (data.error) {
+          addAssistantMessage(data.error);
+          return;
+        }
+        if (data.reply) addAssistantMessage(data.reply);
+        if (data.recipes) displayRecipesInChat(data.recipes);
+        if (data.context) conversationContext = data.context;
+      })
+      .catch(err => {
+        removeLoadingBubble();
+        console.error(err);
+      });
+    };
+  
+    const btn2 = document.createElement('button');
+    btn2.className = 'btn btn-outline-primary btn-sm';
+    btn2.innerText = 'I only want recipes with ingredients I have';
+    btn2.onclick = () => {
+      addUserMessage('I only want recipes with ingredients I have');
+      showLoadingBubble();
+      fetch('/chatbot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: 'I only want recipes with ingredients i have',
+          context: conversationContext,
+          ingredients: allIngredients
+        })
+      })
+      .then(res => res.json())
+      .then(data => {
+        removeLoadingBubble();
+        if (data.error) {
+          addAssistantMessage(data.error);
+          return;
+        }
+        if (data.reply) addAssistantMessage(data.reply);
+        if (data.recipes) displayRecipesInChat(data.recipes);
+        if (data.context) conversationContext = data.context;
+      })
+      .catch(err => {
+        removeLoadingBubble();
+        console.error(err);
+      });
+    };
+  
+    chatSuggestions.appendChild(btn1);
+    chatSuggestions.appendChild(btn2);
+  }
+  
+  /** If user types a random message => normal GPT conversation */
+  function sendMessageToChatbot(message) {
+    showLoadingBubble();
+    fetch('/chatbot', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
         message: message,
         context: conversationContext,
-        ingredients: ingredients
-    };
-
-    // Check if the message is a recipe selection
-    const recipeNumber = parseInt(message);
-    if (!isNaN(recipeNumber) && recipeNumber >= 1 && recipeNumber <= 5) {
-        const selectedRecipe = currentRecipes[recipeNumber - 1];
-        const recipeId = selectedRecipe.id;
-
-        // Include the recipe ID in the data
-        dataToSend.recipe_id = recipeId;
-    }
-
-    // Send the message to the backend
-    fetch('/chatbot', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(dataToSend)
+        ingredients: allIngredients
+      })
     })
-    .then(response => response.json())
+    .then(res => res.json())
     .then(data => {
-        if (data.error) {
-            const errorPara = document.createElement('p');
-            errorPara.innerText = data.error;
-            chatbotDiv.appendChild(errorPara);
-            return;
-        }
-
-        // Display assistant's reply with proper formatting
-        const assistantPara = document.createElement('p');
-        assistantPara.innerHTML = `<strong>Assistant:</strong> ${data.reply.replace(/\n/g, '<br>')}`;
-        chatbotDiv.appendChild(assistantPara);
-
-        // Update conversation context
+      removeLoadingBubble();
+      if (data.error) {
+        addAssistantMessage(data.error);
+        return;
+      }
+      if (data.reply) {
+        addAssistantMessage(data.reply);
+      }
+      if (data.context) {
         conversationContext = data.context;
-
-        // Scroll to the bottom of the chatbot div
-        chatbotDiv.scrollTop = chatbotDiv.scrollHeight;
+      }
     })
-    .catch(error => {
-        console.error('Error:', error);
+    .catch(err => {
+      removeLoadingBubble();
+      console.error(err);
     });
-}
+  }
+  
