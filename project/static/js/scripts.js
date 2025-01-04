@@ -1,21 +1,58 @@
 // static/js/scripts.js
 
+// An expanded list of ingredient categories
 const ingredientCategories = {
-    Vegetables: ["Tomato", "Onion", "Garlic", "Carrot", "Bell Pepper", "Mushroom", "Broccoli", "Spinach", "Cucumber", "Zucchini", "Corn", "Peas", "Beans", "Lettuce", "Cabbage"],
-    Fruits: ["Apple", "Banana", "Orange", "Lemon", "Lime", "Avocado"],
-    Proteins: ["Chicken", "Beef", "Pork", "Fish", "Shrimp", "Tofu", "Bacon", "Sausage"],
-    Dairy: ["Cheese", "Milk", "Eggs", "Butter", "Yogurt", "Cream"],
-    Grains: ["Rice", "Pasta", "Bread", "Flour"],
-    Condiments: ["Salt", "Pepper", "Basil", "Oregano", "Parsley", "Soy Sauce", "Vinegar", "Honey", "Chili"],
-    Sweeteners: ["Sugar"]
+    Vegetables: [
+      "Tomato", "Onion", "Garlic", "Carrot", "Bell Pepper", "Mushroom",
+      "Broccoli", "Spinach", "Cucumber", "Zucchini", "Corn", "Peas",
+      "Beans", "Lettuce", "Cabbage", "Potato", "Sweet Potato", "Celery",
+      "Eggplant", "Green Onion"
+    ],
+    Fruits: [
+      "Apple", "Banana", "Orange", "Lemon", "Lime", "Avocado",
+      "Strawberry", "Blueberry", "Pineapple", "Mango", "Grapes"
+    ],
+    Proteins: [
+      "Chicken", "Beef", "Pork", "Fish", "Shrimp", "Tofu",
+      "Bacon", "Sausage", "Turkey", "Salmon", "Lentils", "Chickpeas"
+    ],
+    Dairy: [
+      "Cheese", "Milk", "Eggs", "Butter", "Yogurt", "Cream",
+      "Ricotta", "Cottage Cheese"
+    ],
+    Grains: [
+      "Rice", "Pasta", "Bread", "Flour", "Quinoa", "Oats"
+    ],
+    Condiments: [
+      "Salt", "Pepper", "Basil", "Oregano", "Parsley", "Soy Sauce",
+      "Vinegar", "Honey", "Chili", "Ketchup", "Mustard", "Mayonnaise"
+    ],
+    Sweeteners: ["Sugar", "Brown Sugar", "Maple Syrup", "Stevia"]
   };
   
+  // Global variables
   let selectedIngredients = [];
   let conversationContext = '';
   let allIngredients = [];
   let currentRecipes = [];
   
+  // On page load, restore selections from localStorage and populate
   document.addEventListener('DOMContentLoaded', function() {
+    // Retrieve saved data (if any)
+    const savedSelections = localStorage.getItem('chefbotSelections');
+    let savedPreferences = {};
+    if (savedSelections) {
+      const parsed = JSON.parse(savedSelections);
+      selectedIngredients = parsed.selectedIngredients || [];
+      savedPreferences = parsed.preferences || {};
+    }
+  
+    // Populate the checkboxes for preferences
+    document.getElementById('vegan').checked = !!savedPreferences.vegan;
+    document.getElementById('gluten-free').checked = !!savedPreferences.glutenFree;
+    document.getElementById('dairy-free').checked = !!savedPreferences.dairyFree;
+    document.getElementById('nut-free').checked = !!savedPreferences.nutFree;
+  
     // 1) Populate ingredient badges
     const ingredientCategoriesDiv = document.getElementById('ingredient-categories');
     Object.keys(ingredientCategories).forEach(category => {
@@ -35,7 +72,12 @@ const ingredientCategories = {
   
       ingredientCategories[category].forEach(ingredient => {
         const badge = document.createElement('span');
-        badge.className = 'badge bg-secondary m-1';
+        // If this ingredient was previously selected, mark it green
+        if (selectedIngredients.includes(ingredient)) {
+          badge.className = 'badge bg-success m-1';
+        } else {
+          badge.className = 'badge bg-secondary m-1';
+        }
         badge.style.cursor = 'pointer';
         badge.innerText = ingredient;
   
@@ -47,6 +89,7 @@ const ingredientCategories = {
             selectedIngredients.push(ingredient);
             badge.className = 'badge bg-success m-1';
           }
+          persistSelectionsToLocalStorage();
         };
   
         cardBody.appendChild(badge);
@@ -56,6 +99,12 @@ const ingredientCategories = {
       colDiv.appendChild(cardDiv);
       ingredientCategoriesDiv.appendChild(colDiv);
     });
+  
+    // Attach events to preference checkboxes
+    document.getElementById('vegan').onchange = persistSelectionsToLocalStorage;
+    document.getElementById('gluten-free').onchange = persistSelectionsToLocalStorage;
+    document.getElementById('dairy-free').onchange = persistSelectionsToLocalStorage;
+    document.getElementById('nut-free').onchange = persistSelectionsToLocalStorage;
   
     // 2) "Find Recipes" button
     const findRecipesButton = document.getElementById('find-recipes');
@@ -124,6 +173,21 @@ const ingredientCategories = {
       });
     };
   });
+  
+  /** Store current selections & preferences in localStorage */
+  function persistSelectionsToLocalStorage() {
+    const preferences = {
+      vegan: document.getElementById('vegan').checked,
+      glutenFree: document.getElementById('gluten-free').checked,
+      dairyFree: document.getElementById('dairy-free').checked,
+      nutFree: document.getElementById('nut-free').checked
+    };
+    const dataToSave = {
+      selectedIngredients: selectedIngredients,
+      preferences: preferences
+    };
+    localStorage.setItem('chefbotSelections', JSON.stringify(dataToSave));
+  }
   
   /** Show a temporary "Assistant: Loading..." bubble */
   function showLoadingBubble() {

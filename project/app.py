@@ -5,6 +5,7 @@ import os
 import openai
 from dotenv import load_dotenv
 import re
+import random
 
 load_dotenv()
 
@@ -43,7 +44,7 @@ def get_recipes():
 @app.route('/see_more', methods=['POST'])
 def see_more():
     """
-    'See more' endpoint: fetch minimal info (title, scaled ingredients, macros) 
+    'See more' endpoint: fetch minimal info (title, scaled ingredients, macros)
     for a recipe from Spoonacular WITHOUT updating the conversation context.
     Shown in a modal that can be hidden.
     """
@@ -64,7 +65,7 @@ def see_more():
 def chatbot():
     """
     Handles special commands:
-    - "CHOOSE_RECIPE_{id}__SERVINGS_{servings}" => fetch recipe info with given servings, 
+    - "CHOOSE_RECIPE_{id}__SERVINGS_{servings}" => fetch recipe info with given servings,
       append the details to the conversation context (CHOSEN_RECIPE_DETAILS).
     - "I want new recipes"
     - "I only want recipes with ingredients I have"
@@ -129,9 +130,9 @@ def chatbot():
             print("Error parsing CHOOSE_RECIPE command:", e)
             return jsonify({'reply': "Error: invalid recipe choose command.", 'context': context})
 
-    # Otherwise, normal conversation with GPT (must use openai.chat.completions.create)
+    # Otherwise, normal conversation with GPT
     try:
-        response = openai.chat.completions.create(
+        response = openai.ChatCompletion.create(
             model='gpt-3.5-turbo',
             messages=[
                 {
@@ -158,7 +159,6 @@ def chatbot():
             temperature=0.7,
         )
         assistant_reply = response.choices[0].message.content.strip()
-        # We do not modify context here; up to you if you want to store the new exchange
         return jsonify({'reply': assistant_reply, 'context': context})
     except Exception as e:
         return jsonify({'reply': f"An error occurred: {str(e)}", 'context': context})
@@ -180,6 +180,12 @@ def get_recipes_from_api(ingredients, preferences=None, fresh_call=False):
         'ignorePantry': True
     }
 
+    # If we're making a fresh call for new recipes, let's sort by random:
+    if fresh_call:
+        params['sort'] = 'random'
+        # Alternatively, you could use a random offset:
+        # params['offset'] = random.randint(0, 50)
+
     intolerances = []
     if preferences:
         if preferences.get('vegan'):
@@ -200,7 +206,7 @@ def get_recipes_from_api(ingredients, preferences=None, fresh_call=False):
         recs = data.get('results', [])
         if recs:
             return recs
-        # fallback
+        # fallback if no match with includeIngredients
         params.pop('includeIngredients', None)
         r2 = requests.get(base_url, params=params)
         if r2.status_code == 200:
