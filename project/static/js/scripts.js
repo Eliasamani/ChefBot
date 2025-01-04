@@ -1,6 +1,5 @@
 // static/js/scripts.js
 
-// An expanded list of ingredient categories
 const ingredientCategories = {
     Vegetables: [
       "Tomato", "Onion", "Garlic", "Carrot", "Bell Pepper", "Mushroom",
@@ -30,15 +29,12 @@ const ingredientCategories = {
     Sweeteners: ["Sugar", "Brown Sugar", "Maple Syrup", "Stevia"]
   };
   
-  // Global variables
   let selectedIngredients = [];
   let conversationContext = '';
   let allIngredients = [];
   let currentRecipes = [];
   
-  // On page load, restore selections from localStorage and populate
   document.addEventListener('DOMContentLoaded', function() {
-    // Retrieve saved data (if any)
     const savedSelections = localStorage.getItem('chefbotSelections');
     let savedPreferences = {};
     if (savedSelections) {
@@ -47,13 +43,12 @@ const ingredientCategories = {
       savedPreferences = parsed.preferences || {};
     }
   
-    // Populate the checkboxes for preferences
     document.getElementById('vegan').checked = !!savedPreferences.vegan;
     document.getElementById('gluten-free').checked = !!savedPreferences.glutenFree;
     document.getElementById('dairy-free').checked = !!savedPreferences.dairyFree;
     document.getElementById('nut-free').checked = !!savedPreferences.nutFree;
   
-    // 1) Populate ingredient badges
+    // Populate ingredient badges
     const ingredientCategoriesDiv = document.getElementById('ingredient-categories');
     Object.keys(ingredientCategories).forEach(category => {
       const colDiv = document.createElement('div');
@@ -72,7 +67,6 @@ const ingredientCategories = {
   
       ingredientCategories[category].forEach(ingredient => {
         const badge = document.createElement('span');
-        // If this ingredient was previously selected, mark it green
         if (selectedIngredients.includes(ingredient)) {
           badge.className = 'badge bg-success m-1';
         } else {
@@ -106,7 +100,7 @@ const ingredientCategories = {
     document.getElementById('dairy-free').onchange = persistSelectionsToLocalStorage;
     document.getElementById('nut-free').onchange = persistSelectionsToLocalStorage;
   
-    // 2) "Find Recipes" button
+    // "Find Recipes" button
     const findRecipesButton = document.getElementById('find-recipes');
     findRecipesButton.onclick = () => {
       const vegan = document.getElementById('vegan');
@@ -174,7 +168,6 @@ const ingredientCategories = {
     };
   });
   
-  /** Store current selections & preferences in localStorage */
   function persistSelectionsToLocalStorage() {
     const preferences = {
       vegan: document.getElementById('vegan').checked,
@@ -298,7 +291,6 @@ const ingredientCategories = {
       if (data.reply) {
         addAssistantMessage(data.reply);
       }
-      // Update context if provided
       if (data.context) {
         conversationContext = data.context;
       }
@@ -324,7 +316,6 @@ const ingredientCategories = {
         alert(data.error);
         return;
       }
-      // data.info => { title, servings, ingredients, macros }
       const info = data.info;
       const modalTitle = document.getElementById('seeMoreModalTitle');
       const modalBody = document.getElementById('seeMoreModalBody');
@@ -340,7 +331,6 @@ const ingredientCategories = {
         <p><strong>Macros:</strong><br>${macrosHtml}</p>
       `;
   
-      // Show the Bootstrap modal
       const myModal = new bootstrap.Modal(document.getElementById('seeMoreModal'), {});
       myModal.show();
     })
@@ -387,6 +377,7 @@ const ingredientCategories = {
     const chatSuggestions = document.getElementById('chat-suggestions');
     chatSuggestions.innerHTML = '';
   
+    // 1) "I want new recipes" => calls fresh_call=True => random sort
     const btn1 = document.createElement('button');
     btn1.className = 'btn btn-outline-primary btn-sm me-2';
     btn1.innerText = 'I want new recipes';
@@ -419,6 +410,7 @@ const ingredientCategories = {
       });
     };
   
+    // 2) "I only want recipes with ingredients I have" => uses fresh_call=False => strict check
     const btn2 = document.createElement('button');
     btn2.className = 'btn btn-outline-primary btn-sm';
     btn2.innerText = 'I only want recipes with ingredients I have';

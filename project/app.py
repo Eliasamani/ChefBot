@@ -65,7 +65,7 @@ def see_more():
 def chatbot():
     """
     Handles special commands:
-    - "CHOOSE_RECIPE_{id}__SERVINGS_{servings}" => fetch recipe info with given servings,
+    - "CHOOSE_RECIPE_{id}__SERVINGS_{servings}" => fetch recipe info with given servings, 
       append the details to the conversation context (CHOSEN_RECIPE_DETAILS).
     - "I want new recipes"
     - "I only want recipes with ingredients I have"
@@ -81,7 +81,7 @@ def chatbot():
 
     user_message_lower = user_message.lower()
 
-    # "I want new recipes"
+    # "I want new recipes" => fresh_call=True => random sort
     if user_message_lower == 'i want new recipes':
         new_recipes = get_recipes_from_api(ingredients, preferences=None, fresh_call=True)
         if not new_recipes:
@@ -96,10 +96,12 @@ def chatbot():
 
     # "I only want recipes with ingredients i have"
     if user_message_lower == 'i only want recipes with ingredients i have':
-        possible_recipes = get_recipes_from_api(ingredients, preferences=None, fresh_call=True)
+        # Notice we pass fresh_call=False to preserve min-missing-ingredients sorting
+        possible_recipes = get_recipes_from_api(ingredients, preferences=None, fresh_call=False)
         if not possible_recipes:
             return jsonify({'reply': "No recipes found.", 'context': context})
         possible_recipes = refine_missing_ingredients(possible_recipes, ingredients)
+        # Strictly filter to those with zero missing ingredients
         strict = [r for r in possible_recipes if not r.get('missedIngredients')]
         if not strict:
             return jsonify({'reply': "No strictly matched recipes found.", 'context': context})
@@ -174,17 +176,16 @@ def get_recipes_from_api(ingredients, preferences=None, fresh_call=False):
         'includeIngredients': ','.join(ingredients),
         'number': 5,
         'ranking': 1,
-        'sort': 'meta-score',
+        # Default to min-missing-ingredients so we get the most complete matches
+        'sort': 'min-missing-ingredients',
         'instructionsRequired': True,
         'fillIngredients': True,
         'ignorePantry': True
     }
 
-    # If we're making a fresh call for new recipes, let's sort by random:
+    # If user wants "brand new recipes," override to random
     if fresh_call:
         params['sort'] = 'random'
-        # Alternatively, you could use a random offset:
-        # params['offset'] = random.randint(0, 50)
 
     intolerances = []
     if preferences:
