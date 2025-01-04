@@ -16,7 +16,15 @@
   </head>
   <body class="bg-light">
     <div class="container py-5">
-      <h1 class="text-center mb-4">Welcome to ChefBot</h1>
+      <div class="d-flex align-items-center justify-content-center mb-4">
+        <img 
+          src="{{ url_for('static', filename='image/logo.png') }}" 
+          alt="ChefBot Logo" 
+          class="img-fluid" 
+          style="max-height: 100px; margin-right: 10px;" 
+        />
+        <h1 class="text-center">Welcome to ChefBot</h1>
+      </div>
 
       <div class="mb-3">
         <h5>Select dietary preferences or allergies:</h5>
