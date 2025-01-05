@@ -1,0 +1,39 @@
+ChefBot User Manual
+Welcome to ChefBot! This AI-powered recipe recommendation chatbot is designed to help you make meal decisions based on the ingredients you have at home. This guide will take you through how to use ChefBot, both through its user interface and its features.
+
+1. Introduction
+ChefBot recommends recipes by understanding the ingredients you have available. By using advanced AI from OpenAI GPT and the Spoonacular API, it can suggest recipes, guide you through cooking, and offer helpful tips while minimizing food waste.
+
+2. Getting Started
+    1. Open a web browser (Chrome, Firefox, or Safari recommended).
+    2. enter the ChefBot Link in you browser by coping it. https://eliar.pythonanywhere.com/ 
+    3. You’ll be presented with a simple chat interface where you can interact with ChefBot.
+
+3. Interacting with ChefBot
+3.1 Inputting Ingredients
+Step 1: ChefBot will prompt you to list the ingredients you have available at home.
+Step 2: Enter the ingredients by either clicking on them if they exist on the list or by writing it in the chat window under "Additional Ingredients". You can list multiple ingredients, separated by commas (e.g., "tomatoes, pasta, garlic").
+Step 3: You can choose dietary preferences or allergies, to be more specific on what recipes you want. 
+
+Once you input your ingredients, ChefBot will provide a list of recipe suggestions. Each recipe will show:
+
+Recipe Name: The name of the dish. 
+Missing Ingredients: If some ingredients are missing for the recipe, ChefBot will list them.
+
+If you click on a recipe more information will be shown such as:
+Ingredients: A list of ingredients needed.
+Instructions: Step-by-step cooking instructions.
+Nutrition: information about the nutritional content of the recipe.
+
+
+4. During Cooking
+ChefBot can help you during the cooking process by providing conversational responses. You can ask questions like:
+
+"How long do I cook the chicken?"
+"What’s the next step after boiling the pasta?"
+ChefBot will respond with relevant cooking advice, tips, and next steps to guide you through the meal preparation.
+
+5. Troubleshooting
+6.1 Common Issues
+Issue: Recipe suggestions don’t match your preferences.
+Solution: Refine your input. For example, add more specific dietary restrictions (e.g., gluten-free) or ingredient exclusions.
