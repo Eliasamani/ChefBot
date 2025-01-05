@@ -34,7 +34,8 @@ def get_recipes():
 
     recipes = get_recipes_from_api(ingredients, preferences)
     if not recipes:
-        return jsonify({'error': 'No recipes found with those ingredients.'}), 404
+      return jsonify({'error': 'No recipes found with all the selected ingredients.'}), 404
+
 
     # Refine missing
     recipes = refine_missing_ingredients(recipes, ingredients)
@@ -175,7 +176,7 @@ def get_recipes_from_api(ingredients, preferences=None, fresh_call=False):
         'apiKey': SPOONACULAR_API_KEY,
         'includeIngredients': ','.join(ingredients),
         'number': 5,
-        'ranking': 1,
+        'ranking': 2,
         # Default to min-missing-ingredients so we get the most complete matches
         'sort': 'min-missing-ingredients',
         'instructionsRequired': True,
