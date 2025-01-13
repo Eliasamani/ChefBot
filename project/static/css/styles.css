@@ -1,38 +1,34 @@
-/* static/css/styles.css */
-
-/* Remove default margins */
 body {
     font-family: Arial, sans-serif;
     margin: 0;
     padding: 0;
     color: #333;
-  }
-  
-  h1, h2, h3, h4, h5 {
+}
+
+h1, h2, h3, h4, h5 {
     color: #2c3e50;
-  }
-  
-  /* Chat bubble styling */
-  .chat-bubble {
+}
+
+/* Chat bubble styling */
+.chat-bubble {
     max-width: 70%;
     padding: 10px 15px;
     border-radius: 10px;
-    clear: both; /* each bubble on its own line */
+    clear: both;
     line-height: 1.4;
     word-wrap: break-word;
     margin-bottom: 10px;
-  }
-  
-  /* Assistant bubble on the left */
-  .assistant-bubble {
+}
+
+/* Assistant bubble on the left */
+.assistant-bubble {
     background-color: #e2e8f0; /* light gray/blue */
     margin-right: auto;
-  }
-  
-  /* User bubble on the right */
-  .user-bubble {
+}
+
+/* User bubble on the right */
+.user-bubble {
     background-color: #c6f6d5; /* light green */
     margin-left: auto;
     text-align: right;
-  }
-  
+}
