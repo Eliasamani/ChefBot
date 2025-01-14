@@ -1,40 +1,59 @@
-// static/js/scripts.js
-
+/*****************************************
+ * Ingredient Categories
+ *****************************************/
 const ingredientCategories = {
     Vegetables: [
-      "Tomato", "Onion", "Garlic", "Carrot", "Bell Pepper", "Mushroom",
-      "Broccoli", "Spinach", "Cucumber", "Zucchini", "Corn", "Peas",
-      "Beans", "Lettuce", "Cabbage", "Potato", "Sweet Potato", "Celery",
-      "Eggplant", "Green Onion"
+      "Tomato","Onion","Garlic","Carrot","Bell Pepper","Mushroom",
+      "Broccoli","Spinach","Cucumber","Zucchini","Corn","Peas",
+      "Beans","Lettuce","Cabbage","Potato","Sweet Potato","Celery",
+      "Eggplant","Green Onion"
     ],
     Fruits: [
-      "Apple", "Banana", "Orange", "Lemon", "Lime", "Avocado",
-      "Strawberry", "Blueberry", "Pineapple", "Mango", "Grapes"
+      "Apple","Banana","Orange","Lemon","Lime","Avocado",
+      "Strawberry","Blueberry","Pineapple","Mango","Grapes"
     ],
     Proteins: [
-      "Chicken", "Beef", "Pork", "Fish", "Shrimp", "Tofu",
-      "Bacon", "Sausage", "Turkey", "Salmon", "Lentils", "Chickpeas"
+      "Chicken","Beef","Pork","Fish","Shrimp","Tofu",
+      "Bacon","Sausage","Turkey","Salmon","Lentils","Chickpeas"
     ],
     Dairy: [
-      "Cheese", "Milk", "Eggs", "Butter", "Yogurt", "Cream",
-      "Ricotta", "Cottage Cheese"
+      "Cheese","Milk","Eggs","Butter","Yogurt","Cream",
+      "Ricotta","Cottage Cheese"
     ],
     Grains: [
-      "Rice", "Pasta", "Bread", "Flour", "Quinoa", "Oats"
+      "Rice","Pasta","Bread","Flour","Quinoa","Oats"
     ],
     Condiments: [
-      "Salt", "Pepper", "Basil", "Oregano", "Parsley", "Soy Sauce",
-      "Vinegar", "Honey", "Chili", "Ketchup", "Mustard", "Mayonnaise"
+      "Salt","Pepper","Basil","Oregano","Parsley","Soy Sauce",
+      "Vinegar","Honey","Chili","Ketchup","Mustard","Mayonnaise"
     ],
-    Sweeteners: ["Sugar", "Brown Sugar", "Maple Syrup", "Stevia"]
+    Sweeteners: [
+      "Sugar","Brown Sugar","Maple Syrup","Stevia"
+    ]
   };
   
+  /*****************************************
+   * Global Variables
+   *****************************************/
+  // The user’s selected ingredients from badges
   let selectedIngredients = [];
+  // GPT conversation context for the /chatbot route
   let conversationContext = '';
+  // Combined list of all ingredients: badges + any typed in
   let allIngredients = [];
+  // Current list of recipe stubs from /get_recipes
   let currentRecipes = [];
   
+  // For the modal: original unscaled recipe, and scaling state
+  let modalOriginalRecipe = null;
+  let modalCurrentServings = 2;
+  let modalBaseServings = 2;
+  
+  /*****************************************
+   * On DOM Loaded
+   *****************************************/
   document.addEventListener('DOMContentLoaded', function() {
+    // Load previous ingredient/prefs from localStorage
     const savedSelections = localStorage.getItem('chefbotSelections');
     let savedPreferences = {};
     if (savedSelections) {
@@ -43,12 +62,13 @@ const ingredientCategories = {
       savedPreferences = parsed.preferences || {};
     }
   
+    // Mark preference checkboxes
     document.getElementById('vegan').checked = !!savedPreferences.vegan;
     document.getElementById('gluten-free').checked = !!savedPreferences.glutenFree;
     document.getElementById('dairy-free').checked = !!savedPreferences.dairyFree;
     document.getElementById('nut-free').checked = !!savedPreferences.nutFree;
   
-    // Populate ingredient badges
+    // Dynamically populate ingredient badges
     const ingredientCategoriesDiv = document.getElementById('ingredient-categories');
     Object.keys(ingredientCategories).forEach(category => {
       const colDiv = document.createElement('div');
@@ -67,16 +87,17 @@ const ingredientCategories = {
   
       ingredientCategories[category].forEach(ingredient => {
         const badge = document.createElement('span');
-        if (selectedIngredients.includes(ingredient)) {
-          badge.className = 'badge bg-success m-1';
-        } else {
-          badge.className = 'badge bg-secondary m-1';
-        }
+        badge.className = selectedIngredients.includes(ingredient)
+          ? 'badge bg-success m-1'
+          : 'badge bg-secondary m-1';
+  
         badge.style.cursor = 'pointer';
         badge.innerText = ingredient;
   
+        // On click, toggle in selectedIngredients
         badge.onclick = () => {
           if (selectedIngredients.includes(ingredient)) {
+            // remove from array
             selectedIngredients = selectedIngredients.filter(i => i !== ingredient);
             badge.className = 'badge bg-secondary m-1';
           } else {
@@ -94,20 +115,14 @@ const ingredientCategories = {
       ingredientCategoriesDiv.appendChild(colDiv);
     });
   
-    // Attach events to preference checkboxes
+    // Event handlers for preference checkboxes
     document.getElementById('vegan').onchange = persistSelectionsToLocalStorage;
     document.getElementById('gluten-free').onchange = persistSelectionsToLocalStorage;
     document.getElementById('dairy-free').onchange = persistSelectionsToLocalStorage;
     document.getElementById('nut-free').onchange = persistSelectionsToLocalStorage;
   
-    // "Find Recipes" button
-    const findRecipesButton = document.getElementById('find-recipes');
-    findRecipesButton.onclick = () => {
-      const vegan = document.getElementById('vegan');
-      const glutenFree = document.getElementById('gluten-free');
-      const dairyFree = document.getElementById('dairy-free');
-      const nutFree = document.getElementById('nut-free');
-  
+    // "Find Recipes" button => calls /get_recipes
+    document.getElementById('find-recipes').onclick = () => {
       const additionalInput = document.getElementById('additional-ingredients').value.trim();
       let additionalIngredients = [];
       if (additionalInput) {
@@ -124,14 +139,13 @@ const ingredientCategories = {
       }
   
       const dietaryPreferences = {
-        vegan: vegan.checked,
-        glutenFree: glutenFree.checked,
-        dairyFree: dairyFree.checked,
-        nutFree: nutFree.checked
+        vegan: document.getElementById('vegan').checked,
+        glutenFree: document.getElementById('gluten-free').checked,
+        dairyFree: document.getElementById('dairy-free').checked,
+        nutFree: document.getElementById('nut-free').checked
       };
   
       showLoadingBubble();
-  
       fetch('/get_recipes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -157,7 +171,6 @@ const ingredientCategories = {
   
         currentRecipes = data.recipes;
         displayRecipesInChat(currentRecipes);
-  
         addChatInputField();
         initChatSuggestions();
       })
@@ -166,8 +179,17 @@ const ingredientCategories = {
         console.error(err);
       });
     };
+  
+    // Clear All Button
+    const clearButton = document.getElementById('clear-ingredients');
+    if (clearButton) {
+      clearButton.onclick = clearAllIngredients;
+    }
   });
   
+  /*****************************************
+   * LocalStorage Persist
+   *****************************************/
   function persistSelectionsToLocalStorage() {
     const preferences = {
       vegan: document.getElementById('vegan').checked,
@@ -175,14 +197,27 @@ const ingredientCategories = {
       dairyFree: document.getElementById('dairy-free').checked,
       nutFree: document.getElementById('nut-free').checked
     };
-    const dataToSave = {
-      selectedIngredients: selectedIngredients,
-      preferences: preferences
-    };
-    localStorage.setItem('chefbotSelections', JSON.stringify(dataToSave));
+    localStorage.setItem('chefbotSelections', JSON.stringify({
+      selectedIngredients,
+      preferences
+    }));
   }
   
-  /** Show a temporary "Assistant: Loading..." bubble */
+  function clearAllIngredients() {
+    selectedIngredients = [];
+    localStorage.removeItem('chefbotSelections');
+    document.querySelectorAll('.badge.bg-success').forEach(badge => {
+      badge.classList.remove('bg-success');
+      badge.classList.add('bg-secondary');
+    });
+    document.getElementById('additional-ingredients').value = '';
+    alert('All ingredients have been cleared.');
+  }
+  
+  /*****************************************
+   * Chat Display Helpers
+   *****************************************/
+  /** Show "Assistant: Loading..." bubble */
   function showLoadingBubble() {
     const chatbotDiv = document.getElementById('chatbot');
     chatbotDiv.style.display = 'block';
@@ -196,7 +231,7 @@ const ingredientCategories = {
     chatMessagesDiv.scrollTop = chatMessagesDiv.scrollHeight;
   }
   
-  /** Remove the "Loading..." bubble if it exists */
+  /** Remove "Loading..." bubble */
   function removeLoadingBubble() {
     const bubble = document.getElementById('loading-bubble');
     if (bubble) bubble.remove();
@@ -222,7 +257,9 @@ const ingredientCategories = {
     chatMessagesDiv.scrollTop = chatMessagesDiv.scrollHeight;
   }
   
-  /** Display recipes with "Choose" and "See more" */
+  /*****************************************
+   * Display Recipes in Chat
+   *****************************************/
   function displayRecipesInChat(recipes) {
     const chatMessagesDiv = document.getElementById('chat-messages');
     chatMessagesDiv.innerHTML = '';
@@ -234,23 +271,20 @@ const ingredientCategories = {
   
     recipes.forEach((recipe) => {
       const recipeId = recipe.id;
+  
+      // Unique input ID so each recipe has its own servings input
+      const servingsInputId = `servings-${recipeId}`;
+  
       const bubble = document.createElement('div');
       bubble.className = 'chat-bubble assistant-bubble';
-  
-      const missed = recipe.missedIngredients || [];
-      let missedText = '';
-      if (missed.length > 0) {
-        const names = missed.map(m => m.name).join(', ');
-        missedText = ` (Missing: ${names})`;
-      }
-  
-      const uniqueId = `servings-${recipeId}`;
       bubble.innerHTML = `
-        <strong>${recipe.title}</strong> ${missedText}
-        <br>
-        <label for="${uniqueId}" class="form-label mt-2" style="font-size: 0.9em;">Servings:</label>
-        <input type="number" id="${uniqueId}" min="1" value="2" style="width: 60px; margin-right: 5px;">
-        <button class="btn btn-sm btn-secondary" onclick="chooseRecipe('${recipeId}', '${uniqueId}')">
+        <strong>${recipe.title}</strong><br>
+        <label for="${servingsInputId}" class="form-label mt-2" style="font-size: 0.9em;">
+          Servings:
+        </label>
+        <input type="number" id="${servingsInputId}" min="1" value="2"
+               style="width: 60px; margin-right: 5px;">
+        <button class="btn btn-sm btn-secondary" onclick="chooseRecipe('${recipeId}', '${servingsInputId}')">
           Choose
         </button>
         <button class="btn btn-sm btn-primary ms-2" onclick="seeMoreRecipe('${recipeId}')">
@@ -262,16 +296,16 @@ const ingredientCategories = {
     chatMessagesDiv.scrollTop = chatMessagesDiv.scrollHeight;
   }
   
-  /** Called when user clicks "Choose" */
+  /*****************************************
+   * Choose Recipe Button
+   *****************************************/
   function chooseRecipe(recipeId, servingsInputId) {
     const servingsInput = document.getElementById(servingsInputId);
-    let servings = 2;
-    if (servingsInput) {
-      servings = parseInt(servingsInput.value, 10) || 2;
-    }
-    addUserMessage(`Choosing recipe #${recipeId} for ${servings} servings...`);
+    let servings = parseInt(servingsInput.value, 10) || 2;
   
+    addUserMessage(`Choosing recipe #${recipeId} for ${servings} servings...`);
     showLoadingBubble();
+  
     fetch('/chatbot', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -301,13 +335,15 @@ const ingredientCategories = {
     });
   }
   
-  /** "See more" => fetch minimal info from /see_more, show in a Bootstrap modal */
+  /*****************************************
+   * "See More" => Show in Modal with +/-
+   *****************************************/
   function seeMoreRecipe(recipeId) {
     showLoadingBubble();
     fetch('/see_more', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ recipe_id: recipeId, servings: 2 })
+      body: JSON.stringify({ recipe_id: recipeId })
     })
     .then(res => res.json())
     .then(data => {
@@ -316,21 +352,14 @@ const ingredientCategories = {
         alert(data.error);
         return;
       }
-      const info = data.info;
-      const modalTitle = document.getElementById('seeMoreModalTitle');
-      const modalBody = document.getElementById('seeMoreModalBody');
   
-      modalTitle.textContent = info.title;
-      const ingHtml = info.ingredients.map(ing => `<li>${ing}</li>`).join('');
-      const macrosHtml = info.macros.replace(/\n/g, '<br>');
+      // Store original unscaled recipe
+      modalOriginalRecipe = structuredClone(data.info);
+      modalCurrentServings = modalOriginalRecipe.servings || 2;
+      modalBaseServings = modalOriginalRecipe.servings || 2;
   
-      modalBody.innerHTML = `
-        <p><strong>Servings:</strong> ${info.servings}</p>
-        <p><strong>Ingredients:</strong></p>
-        <ul>${ingHtml}</ul>
-        <p><strong>Macros:</strong><br>${macrosHtml}</p>
-      `;
-  
+      // Populate the modal
+      updateModal();
       const myModal = new bootstrap.Modal(document.getElementById('seeMoreModal'), {});
       myModal.show();
     })
@@ -340,7 +369,116 @@ const ingredientCategories = {
     });
   }
   
-  /** Provide user input field + "send" button */
+  /** Re-render modal with scaled data */
+  function updateModal() {
+    if (!modalOriginalRecipe) return;
+  
+    const scaleFactor = modalCurrentServings / modalBaseServings;
+  
+    // Scale ingredients
+    const scaledIngredients = modalOriginalRecipe.ingredients.map(ing =>
+      scaleIngredientLine(ing, scaleFactor)
+    );
+  
+    // Scale macros
+    const scaledMacros = scaleMacros(modalOriginalRecipe.macros, scaleFactor);
+  
+    // DOM updates
+    const modalTitle = document.getElementById('seeMoreModalTitle');
+    modalTitle.textContent = modalOriginalRecipe.title || 'Untitled';
+  
+    const modalBody = document.getElementById('seeMoreModalBody');
+    const ingHtml = scaledIngredients.map(ing => `<li>${ing}</li>`).join('');
+    const macrosHtml = scaledMacros.replace(/\n/g, '<br>');
+  
+    modalBody.innerHTML = `
+      <div class="d-flex justify-content-start align-items-center mb-2">
+        <strong class="me-2">Servings:</strong>
+        <button class="btn btn-sm btn-outline-secondary me-2" onclick="decrementServings()">-</button>
+        <span id="servings-display">${modalCurrentServings}</span>
+        <button class="btn btn-sm btn-outline-secondary ms-2" onclick="incrementServings()">+</button>
+      </div>
+      <p><strong>Ingredients:</strong></p>
+      <ul>${ingHtml}</ul>
+      <p><strong>Macros:</strong><br>${macrosHtml}</p>
+      <p><strong>Instructions:</strong><br>${modalOriginalRecipe.instructions}</p>
+    `;
+  }
+  
+  /*****************************************
+   * +/- Buttons in Modal
+   *****************************************/
+  function decrementServings() {
+    if (modalCurrentServings > 1) {
+      modalCurrentServings--;
+      updateModal();
+    }
+  }
+  
+  function incrementServings() {
+    modalCurrentServings++;
+    updateModal();
+  }
+  
+  /*****************************************
+   * Scale a Single Ingredient Line
+   *  e.g. "200g tofu" => "300g tofu" if scaleFactor=1.5
+   *****************************************/
+  function scaleIngredientLine(ingredientLine, scaleFactor) {
+    // Matches a leading number (like 200 or 2.5) and captures the rest even if no space
+    // e.g. "200g tofu" => [ "200g tofu", "200", "g tofu" ]
+    // e.g. "1.5cups water" => [ "1.5cups water", "1.5", "cups water" ]
+    const pattern = /^(\d+(?:\.\d+)?)(.*)$/;
+    const match = ingredientLine.trim().match(pattern);
+    if (!match) {
+      // If not a match, return as-is
+      return ingredientLine;
+    }
+  
+    const originalAmount = parseFloat(match[1]);
+    let rest = match[2]; // e.g. "g tofu" or " cups flour"
+    const scaledAmount = (originalAmount * scaleFactor).toFixed(2);
+  
+    // Convert "3.00" => "3", "2.50" => "2.5"
+    const cleanedAmount = parseFloat(scaledAmount).toString();
+  
+    // Optionally insert a space if there's none
+    rest = rest.trim();
+    if (rest && !rest.startsWith(' ')) {
+      rest = ' ' + rest;
+    }
+  
+    return `${cleanedAmount}${rest}`;
+  }
+  
+  /*****************************************
+   * Scale Macros
+   *  e.g. "Calories: 100" => "Calories: 150" (1.5x)
+   *****************************************/
+  function scaleMacros(macrosLine, scaleFactor) {
+    if (!macrosLine) return 'No macros data';
+  
+    const parts = macrosLine.split(',');
+    const scaledParts = parts.map(p => {
+      const trimmed = p.trim();
+      const match = trimmed.match(/(.*?):\s*(\d+(?:\.\d+)?)(.*)/);
+      if (!match) {
+        return trimmed;
+      }
+      const label = match[1]; // e.g. "Calories"
+      const value = parseFloat(match[2]) || 0; // e.g. 100
+      const unit = match[3]; // e.g. "", or "g", or " mg"
+      const newValue = (value * scaleFactor).toFixed(2);
+      const cleaned = parseFloat(newValue).toString();
+      return `${label}: ${cleaned}${unit}`;
+    });
+  
+    return scaledParts.join(', ');
+  }
+  
+  /*****************************************
+   * Chat Input & Suggestions
+   *****************************************/
   function addChatInputField() {
     const inputContainer = document.getElementById('input-container');
     inputContainer.innerHTML = '';
@@ -372,12 +510,11 @@ const ingredientCategories = {
     };
   }
   
-  /** Provide two suggestions */
   function initChatSuggestions() {
     const chatSuggestions = document.getElementById('chat-suggestions');
     chatSuggestions.innerHTML = '';
   
-    // 1) "I want new recipes" => calls fresh_call=True => random sort
+    // Suggestion #1: "I want new recipes"
     const btn1 = document.createElement('button');
     btn1.className = 'btn btn-outline-primary btn-sm me-2';
     btn1.innerText = 'I want new recipes';
@@ -400,9 +537,15 @@ const ingredientCategories = {
           addAssistantMessage(data.error);
           return;
         }
-        if (data.reply) addAssistantMessage(data.reply);
-        if (data.recipes) displayRecipesInChat(data.recipes);
-        if (data.context) conversationContext = data.context;
+        if (data.reply) {
+          addAssistantMessage(data.reply);
+        }
+        if (data.recipes) {
+          displayRecipesInChat(data.recipes);
+        }
+        if (data.context) {
+          conversationContext = data.context;
+        }
       })
       .catch(err => {
         removeLoadingBubble();
@@ -410,51 +553,18 @@ const ingredientCategories = {
       });
     };
   
-    // 2) "I only want recipes with ingredients I have" => uses fresh_call=False => strict check
-    const btn2 = document.createElement('button');
-    btn2.className = 'btn btn-outline-primary btn-sm';
-    btn2.innerText = 'I only want recipes with ingredients I have';
-    btn2.onclick = () => {
-      addUserMessage('I only want recipes with ingredients I have');
-      showLoadingBubble();
-      fetch('/chatbot', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: 'I only want recipes with ingredients i have',
-          context: conversationContext,
-          ingredients: allIngredients
-        })
-      })
-      .then(res => res.json())
-      .then(data => {
-        removeLoadingBubble();
-        if (data.error) {
-          addAssistantMessage(data.error);
-          return;
-        }
-        if (data.reply) addAssistantMessage(data.reply);
-        if (data.recipes) displayRecipesInChat(data.recipes);
-        if (data.context) conversationContext = data.context;
-      })
-      .catch(err => {
-        removeLoadingBubble();
-        console.error(err);
-      });
-    };
   
     chatSuggestions.appendChild(btn1);
-    chatSuggestions.appendChild(btn2);
   }
   
-  /** If user types a random message => normal GPT conversation */
+  /** Normal GPT conversation: user types => /chatbot => GPT reply */
   function sendMessageToChatbot(message) {
     showLoadingBubble();
     fetch('/chatbot', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        message: message,
+        message,
         context: conversationContext,
         ingredients: allIngredients
       })
