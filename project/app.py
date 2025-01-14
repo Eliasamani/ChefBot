@@ -294,11 +294,37 @@ def generate_recipes_with_gpt(ingredients, preferences, fresh_call=False):
     print("\n[DEBUG] generate_recipes_with_gpt() called")
     print(f"[DEBUG] ingredients={ingredients}, preferences={preferences}, fresh_call={fresh_call}")
 
+    #system_instructions = (
+    #    "You are ChefBot, a helpful cooking assistant. "
+    #    "You provide ONLY valid JSON with keys: title, ingredients, macros, instructions, servings. "
+    #    "No extra text outside JSON."
+    #)
+    
     system_instructions = (
-        "You are ChefBot, a helpful cooking assistant. "
-        "You provide ONLY valid JSON with keys: title, ingredients, macros, instructions, servings. "
-        "No extra text outside JSON."
-    )
+    "You are ChefBot, a helpful and knowledgeable cooking assistant. "
+    "Your goal is to generate high-quality, creative, and well-balanced recipes based on user input. "
+    "Follow these steps before providing the final JSON response:\n\n"
+
+    "1 **Analyze Ingredients:** Carefully review the given ingredients and think about their compatibility. "
+    "Consider common cooking techniques that work well for these ingredients.\n\n"
+
+    "2 **Select a Recipe Style:** Decide if the recipe should be a salad, soup, main dish, or side dish. "
+    "Choose based on ingredient suitability and cooking methods.\n\n"
+
+    "3 **Ensure Nutritional Balance:** Make sure the recipe includes a balance of proteins, carbs, and healthy fats. "
+    "If an ingredient list lacks a key macronutrient, suggest minor improvements.\n\n"
+
+    "4 **Check Flavor Pairings:** Consider how the ingredients will taste together. "
+    "Use herbs, spices, and seasoning to enhance flavors without overpowering the dish.\n\n"
+
+    "5 **Generate a Step-by-Step Cooking Process:** Provide clear, structured cooking instructions. "
+    "Ensure that steps follow a logical order and are easy to follow.\n\n"
+
+    "6 **Format the Response as JSON:** Provide ONLY valid JSON with the following keys: "
+    "'title', 'ingredients', 'macros', 'instructions', and 'servings'. "
+    "DO NOT include explanations, comments, or extra text outside of the JSON response.\n"
+)
+
 
     # Few-shot examples:
     example_user_1 = "I want new recipes."
@@ -365,11 +391,96 @@ def generate_recipes_with_gpt(ingredients, preferences, fresh_call=False):
 
         recipes = json.loads(response_text)
         if isinstance(recipes, list):
-            return recipes
+            # Self-Consistency Check
+            if any(preferences.values()):
+                print(preferences)
+                print("[DEBUG] Self-consistency check.")
+                verified_recipes = validate_recipes_with_gpt(recipes, preferences)
+                return verified_recipes
+            else:
+                return recipes  # Return as-is if no preferences exist
+        
     except Exception as e:
         print("[DEBUG] Error generating recipes with GPT:", e)
 
     return []
+
+
+def validate_recipes_with_gpt(recipes, preferences):
+    """
+    Takes the generated recipes and validates them against user preferences
+    by re-feeding them into GPT to confirm compliance.
+
+    - If all recipes are valid, return them as-is.
+    - If any recipe is invalid, regenerate new ones.
+    - Preserve the original JSON structure.
+    """
+    system_instructions = (
+        "You are an AI assistant verifying that the following recipes strictly adhere "
+        "to the user's dietary preferences. If any recipe includes an ingredient that violates "
+        "the preferences, mark it as 'is_valid': false.\n"
+        "Return the same JSON structure but add an 'is_valid' key (true/false) for each recipe."
+        "DO NOT add any extra text or explanations—ONLY return the JSON array."
+    )
+
+    validation_prompt = (
+        f"The user has these dietary preferences: {preferences}. "
+        "Check the following recipes and mark whether they comply.\n"
+        f"Recipes: {json.dumps(recipes, indent=2)}"
+    )
+
+    print("[DEBUG] Validation Prompt:", validation_prompt)
+
+    messages = [
+        {"role": "system", "content": system_instructions},
+        {"role": "user", "content": validation_prompt},
+    ]
+
+    try:
+        response = openai.chat.completions.create(
+            model='gpt-3.5-turbo',
+            messages=messages,
+            max_tokens=1000,
+            temperature=0.5,
+        )
+        response_text = response.choices[0].message.content.strip()
+
+        if not response_text:
+            print("[ERROR] GPT returned an empty response for validation.")
+            return recipes  # Return original recipes if validation fails
+
+        print("[DEBUG] GPT Validation Response:", response_text)
+
+        validated_recipes = json.loads(response_text)
+
+        if not isinstance(validated_recipes, list):
+            print("[ERROR] GPT response is not a valid JSON array.")
+            return recipes  # Return original recipes if JSON is malformed
+
+        # Check if all recipes are valid
+        all_valid = all(r.get("is_valid", True) for r in validated_recipes)
+
+        if all_valid:
+            print("[DEBUG] All recipes are valid. Returning as-is.")
+            # Remove 'is_valid' field before returning, to keep original format
+            for recipe in validated_recipes:
+                recipe.pop("is_valid", None)
+            return validated_recipes
+
+        # If some recipes are invalid, regenerate new ones
+        print("[DEBUG] Some recipes were invalid, regenerating new ones...")
+        return generate_recipes_with_gpt([], preferences, fresh_call=True)
+
+    except json.JSONDecodeError as e:
+        print("[ERROR] JSON parsing error:", e)
+        print("[DEBUG] Raw GPT response:", response_text)
+        return recipes  # Return original recipes if JSON decoding fails
+
+    except Exception as e:
+        print("[DEBUG] Error validating recipes with GPT:", e)
+        return recipes  # Return original recipes on error
+
+
 
 
 def generate_recipe_details_msg(recipe_info):
